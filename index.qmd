@@ -1,0 +1,114 @@
+---
+title: "Iterations"
+---
+
+What this does now is take a list of spreadsheet ids and then enhances them to be importable URLs. We then take the list of importable URLs and modify them to specify which sheet we want, then read and bind them together.
+
+What isn't here is cleaning the data afterward to fix the dates and numbers. 
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(janitor)
+```
+
+## Build our sheet urls
+
+First a bit about accessing Google Sheets from a url.
+
+This is the default Austin spreadsheet url:
+
+https://docs.google.com/spreadsheets/d/1726VMufDoXnOisYticz9qh6MC9JylZ7GUx_s2JcQ0Bw/edit
+
+And this is the "Expenditure" sheet:
+
+https://docs.google.com/spreadsheets/d/1726VMufDoXnOisYticz9qh6MC9JylZ7GUx_s2JcQ0Bw/edit#gid=1522452565
+
+- The part between `/d/` and `/edit` is the SPREADHSHEET_ID. It's unique to each spreadsheet. 
+- The `gid=` value is the specific sheet. The first sheet created is always `gid=0`. New sheets get a new ID, but they aren't unique across the system. If you copy a spreadsheet with multiple sheets, the sheet gid's remain the same.
+
+We can use a variation of these urls to export our data. It works like this:
+
+https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/export?format=<FORMAT_VALUE>&gid=<SHEET_GID>
+
+We just need to supply the <SPREADSHEET_ID>, the <FORMAT_VALUE> which is `csv` in our case, and optionally the <SHEET_GID>
+
+We are lucky that all our manual entry spreadsheets are copied from a template so the GID is always the same. (This is not a sure thing, and things can break if people don't use the template and we'll have to adjust.) Because they are all the same, we can build a list of urls and pluck the specific sheet we want from the spreadsheet.
+
+### Make a list of the sheet id's
+
+We start by making a list of all our sheet ids. Right now I'm thinking it is easiest to just do this directly in R.
+
+```{r}
+sheet_ids <- c(
+  "1726VMufDoXnOisYticz9qh6MC9JylZ7GUx_s2JcQ0Bw", # Austin ISD
+  "1va9N19U9DxIL5-e4Id85YES3Lv4eFfsc6OKe9tU_9V8" # Hays CISD
+)
+```
+
+### Turn them into urls
+
+Now we have to make a collection of those "export" urls using our ids.
+
+Make a list of sheet export URLs by pasting together the parts of the URL and sheet_ids. We're using the `map()` function, but we have to create an anonymous function so we can pass our data into it. 
+
+```{r}
+sheet_url_begin <- "https://docs.google.com/spreadsheets/d/"
+
+sheet_url_end <- "/export?format=csv"
+
+sheet_urls <- sheet_ids |> 
+  map(\(x) paste0(sheet_url_begin, x, sheet_url_end))
+
+sheet_urls
+```
+
+## Gather the Contributions
+
+Here we take those sheet urls and the add onto it the `gid=` part so we can pick which sheet we want. The Contributions `gid` is "0".
+
+Then we take that result and map it onto read_csv, importing everything as text. We are forcing to text to ensure we can bind them together without errors. The downside is we have to fix them later.
+
+```{r}
+contribs <- sheet_urls |> 
+  map(paste0,"&gid=0") |> # adds to the end of urls which sheet we want
+  map(
+    read_csv,
+    col_type = list(.default = col_character()) # Makes everything text so they can bind together. Will have to fix dates, numbers.
+  ) |> 
+  list_rbind() # binds them together
+
+# Here above ^^^ you could tack on a new function to convert dates and numbers based on the column names.
+
+contribs |> slice_head(n = 5)
+```
+
+## Gather the Summaries
+
+This is the same as above but we are changing out the gid number to get the Report Summary sheet.
+
+```{r}
+summaries <- sheet_urls |> 
+  map(paste0,"&gid=1715223268") |>
+  map(read_csv, col_type = list(.default = col_character())) |> 
+  list_rbind()
+
+summaries |> slice_head(n = 5)
+```
+
+## What is next
+
+Those contribs and summaries dataframes above need some cleaning. Since have to clean multiple versions of this data, you can use iteration for this process, too.
+
+As an example, take a look at the [tx-campaign-finance Cleaning](https://utdata.github.io/tx-campaign-finance/01-cleaning.html) notebook and take note of the [Parse numbers and dates Function](https://utdata.github.io/tx-campaign-finance/01-cleaning.html#parse-numbers-and-dates) and how it is used later. 
+
+1. Make a similar function in your cleaning notebook. You'll have to adjust the part of `across()` to specify the number and date variables. In our data the dates end in "Date" and the number fields end in "Amount".
+2. Then after the list_rbind() you should be able to pass the data into your convert_datatypes function to convert the data.
+3. Once you get that working for one of the data sets (like contribs), then add the function to the summaries.
+4. Add your own import for expenses.
+5. Export all the cleaned data as rds files.
