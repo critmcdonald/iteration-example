@@ -103,7 +103,7 @@ summaries |> slice_head(n = 5)
 
 ## What is next
 
-Those contribs and summaries dataframes above need some cleaning. Since have to clean multiple versions of this data, you can use iteration for this process, too.
+Those contribs and summaries dataframes above need some cleaning. Since you have to clean multiple versions of this data, you can use iteration for this process, too.
 
 As an example, take a look at the [tx-campaign-finance Cleaning](https://utdata.github.io/tx-campaign-finance/01-cleaning.html) notebook and take note of the [Parse numbers and dates Function](https://utdata.github.io/tx-campaign-finance/01-cleaning.html#parse-numbers-and-dates) and how it is used later. 
 
